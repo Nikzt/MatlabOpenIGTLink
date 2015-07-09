@@ -27,10 +27,11 @@ function result=Write1DFloatArrayMessage(deviceName, data)
     result=WriteOpenIGTLinkMessage(msg);
 end
 
-function result=igtlSendTransformMessage(deviceName, transform)
+function result=igtlSendTransformMessage(deviceName, transform, timestamp)
     msg.dataTypeName='TRANSFORM';
     msg.deviceName=deviceName;
     msg.timestamp=igtlTimestampNow();
+    msg.timestamp=timestamp;
     % version number
     % note that it is an unsigned short value, but small positive signed and unsigned numbers are represented the same way, so we can use writeShort
     msg.body = [];
@@ -52,7 +53,12 @@ function result=WriteOpenIGTLinkMessage(msg)
     % Add constant fields values
     msg.versionNumber=1;
     msg.bodySize=length(msg.body);
-    msg.bodyCrc=0; % TODO: compute this
+    crc=0;
+    for k=1:length(msg.body)
+        crc=igtlComputeCrc(msg.body(k),crc);
+        disp(crc)
+    end
+    msg.bodyCrc=crc;
     % Pack message
     data=[];
     data=[data, convertFromUint16ToUint8Vector(msg.versionNumber)];
@@ -60,8 +66,9 @@ function result=WriteOpenIGTLinkMessage(msg)
     data=[data, padString(msg.deviceName,20)];
     data=[data, convertFromInt64ToUint8Vector(msg.timestamp)];
     data=[data, convertFromInt64ToUint8Vector(msg.bodySize)];
-    data=[data, convertFromInt64ToUint8Vector(msg.bodyCrc)];
-    data=[data, uint8(msg.body)];    
+    data=[data, convertFromUint64ToUint8Vector(msg.bodyCrc)];
+    %data=[data, typecast(msg.body, 'uint8')];
+    data=[data, uint8(msg.body)];
     result=1;
     try
         DataOutputStream(socket.outputStream).write(uint8(data),0,length(data));
@@ -116,7 +123,11 @@ function result=convertFromInt64ToUint8Vector(int64Value)
   result(6)=getNthByte(int64Value,2);
   result(7)=getNthByte(int64Value,1);
   result(8)=getNthByte(int64Value,0);
-end 
+end
+
+function result=convertFromUint64ToUint8Vector(uint64Value)
+  result = typecast(uint64(uint64Value),'uint8');
+end
 
 function paddedStr=padString(str,strLen)
   paddedStr=str(1:min(length(str),strLen));
