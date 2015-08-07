@@ -1,10 +1,11 @@
 % OpenIGTLink server that executes the received string commands
-function receiver = OpenIGTLinkMessageReceiver(sock, onRxStringMsg, onRxTransformMsg, onRxNDArrayMsg)
-    global onRxStringMessage onRxTransformMessage onRxNDArrayMessage;
+function receiver = OpenIGTLinkMessageReceiver(sock, onRxStringMsg, onRxTransformMsg, onRxNDArrayMsg, onRxPolyDataMsg, onRxImageMsg)
+    global onRxStringMessage onRxTransformMessage onRxNDArrayMessage onRxImageMessage onRxPolyDataMessage;
     onRxStringMessage = onRxStringMsg;
     onRxTransformMessage = onRxTransformMsg;
     onRxImageMessage = onRxImageMsg;
     onRxNDArrayMessage = onRxNDArrayMsg;
+    onRxPolyDataMessage = onRxPolyDataMsg;
 
     global socket;
     socket = sock;
@@ -16,7 +17,7 @@ function receiver = OpenIGTLinkMessageReceiver(sock, onRxStringMsg, onRxTransfor
 end
 
 function [name data] = readMessage()
-    global onRxStringMessage onRxTransformMessage onRxImageMessage onRxNDArrayMessage;
+    global onRxStringMessage onRxTransformMessage onRxImageMessage onRxNDArrayMessage onRxPolyDataMessage;
 
     msg = ReadOpenIGTLinkMessage();
     
@@ -33,6 +34,8 @@ function [name data] = readMessage()
         [name data]=handleImageMessage(msg, onRxImageMessage );
     elseif strcmpi(messageType, 'NDARRAY')
         [name data]=handleNDArrayMessage(msg, onRxNDArrayMessage );
+    elseif strcmpi(messageType, 'POLYDATA')
+        [name data]=handlePolyDataMessage(msg, onRxPolyDataMessage );
     end
 
 end
@@ -100,8 +103,8 @@ function [name data] = handleImageMessage(msg, onRxStringMessage)
     positionY = convertFromUint8VectorToFloat32(body(i:i+3));i = i + 4;
     positionZ = convertFromUint8VectorToFloat32(body(i:i+3));i = i + 4;
 
-    // Save the transform that is embedded in the IMAGE message into the tracked frame
-    // igtl origin is in the image center
+    % Save the transform that is embedded in the IMAGE message into the tracked frame
+    % igtl origin is in the image center
     centerOriginToCornerOriginTransform=eye(4);
     centerOriginToCornerOriginTransform(1:3,4) = [ -volumeSizeI/2; -volumeSizeJ/2; -volumeSizeK/2 ];
     data.ijkToXyz = data.ijkToXyz * centerOriginToCornerOriginTransform;
@@ -127,8 +130,160 @@ function [name data] = handleImageMessage(msg, onRxStringMessage)
 end
 
 function handleNDArrayMessage(msg, onRxNDArrayMessage)
-  print("handleNDArrayMessage is not yet implemented");
+  print('handleNDArrayMessage is not yet implemented');
 end
+
+function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
+    polyData = [];
+    msgBodyOffset = 1;
+    numberOfPoints = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    numberOfVerices = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    totalSizeVerices = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    numberOfLines = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    totalSizeLines = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    numberOfPolygons = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    totalSizePolygons = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    numberOfTriangleStrips = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    totalSizeTriangleStrips = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    numberOfAttributes = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    
+    polyData.points = zeros(numberOfPoints, 3);
+    disp(polyData.points);
+    for pointIndex=1:numberOfPoints
+      for componentIndex=1:3
+        polyData.points(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        msgBodyOffset = msgBodyOffset + 4;
+      end      
+    end
+    
+    %Read Vertex---------------------
+    %Determine Size of Matrix
+    vertexSizeList = [];
+    sizeListOffset = msgBodyOffset;
+    for i=1:numberOfVertices
+        vertexIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
+        append(vertexSizeList, vertexIndex);
+        sizeListOffset = sizeListOffset + (4*vertexIndex);
+    end
+    maxVertexSize = max(vertexSizeList);
+    
+    %Create empty matrix and insert data
+    polyData.vertices = zeros(numberOfVertices, maxVertexSize);
+    for pointIndex=1:numberOfVertices
+        vertexIndex = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        for componentIndex=1:vertexIndex
+            polyData.vertices(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+            msgBodyOffset = msgBodyOffset + 4;
+        end
+    end
+    
+    %Read Lines---------------------
+    %Determine Size of Matrix
+    lineSizeList = [];
+    sizeListOffset = msgBodyOffset;
+    for i=1:numberOfLines
+        lineIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
+        append(lineSizeList, lineIndex);
+        sizeListOffset = sizeListOffset + (4*lineIndex);
+    end
+    maxLineSize = max(lineSizeList);
+    
+    %Create empty matrix and insert data
+    polyData.lines = zeros(numberOfLines, maxLineSize);
+    for pointIndex=1:numberOfLines
+        lineIndex = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        for componentIndex=1:lineIndex
+            polyData.vertices(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+            msgBodyOffset = msgBodyOffset + 4;
+        end
+    end
+    
+    %Read Polygons---------------------
+    %Determine Size of Matrix
+    polygonSizeList = [];
+    sizeListOffset = msgBodyOffset;
+    for i=1:numberOfPolygons
+        polygonIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
+        append(polygonSizeList, polygonIndex);
+        sizeListOffset = sizeListOffset + (4*polygonIndex);
+    end
+    maxPolygonSize = max(polygonSizeList);
+    
+    %Create empty matrix and insert data
+    polyData.polygons = zeros(numberOfPolygons, maxPolygonSize);
+    for pointIndex=1:numberOfPolygons
+        polygonIndex = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        for componentIndex=1:polygonIndex
+            polyData.polygons(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+            msgBodyOffset = msgBodyOffset + 4;
+        end
+    end
+    
+    %Read Triangle Strips---------------------
+    %Determine Size of Matrix
+    triangleStripSizeList = [];
+    sizeListOffset = msgBodyOffset;
+    for i=1:numberOfTriangleStrips
+        triangleStripIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
+        append(triangleStripSizeList, triangleStripIndex);
+        sizeListOffset = sizeListOffset + (4*triangleStripIndex);
+    end
+    maxTriangleStripSize = max(triangleStripSizeList);
+    
+    %Create empty matrix and insert data
+    polyData.triangleStrips = zeros(numberOfTrianglesStrips, maxTriangleStripSize);
+    for pointIndex=1:numberOfTriangleStrips
+        triangleStripIndex = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        for componentIndex=1:triangleStripIndex
+            polyData.triangleStrips(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+            msgBodyOffset = msgBodyOffset + 4;
+        end
+    end
+    
+    
+    
+
+    
+    typeAttribute0 = convertFromUint8VectorToUint16(msg.body(msgBodyOffset:msgBodyOffset+1));
+    msgBodyOffset = msgBodyOffset + 2;
+    
+    nAttribute0 = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    msgBodyOffset = msgBodyOffset + 4;
+    
+    
+    typeAttribute1 = convertFromUint8VectorToUint16(msg.body(msgBodyOffset:msgBodyOffset+1));
+    msgBodyOffset = msgBodyOffset + 2;
+    
+    nAttribute1 = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3))
+    msgBodyOffset = msgBodyOffset + 4;
+    
+    typeAttributes = convertFromUint8VectorToUint16(msg.body(msgBodyOffset:msgBodyOffset+1));
+    msgBodyOffset = msgBodyOffset + 2;
+    
+    nAttributes = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3))
+    msgBodyOffset = msgBodyOffset + 4;
+    
+    
+    
+    
+    
+    
+    
+    name = msg.deviceName;
+    
+    %onRxPolyDataMessage(msg.deviceName , polyData);
+end
+
 
 %%  Parse OpenIGTLink messag header
 % http://openigtlink.org/protocols/v2_header.html    
