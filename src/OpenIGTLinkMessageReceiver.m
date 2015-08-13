@@ -136,17 +136,22 @@ end
 function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
     polyData = [];
     msgBodyOffset = 1;
+    disp(msg.body(1:100));
     numberOfPoints = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    disp('Number of Points');
+    disp(numberOfPoints);
     msgBodyOffset = msgBodyOffset + 4;
-    numberOfVerices = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    numberOfVertices = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
     msgBodyOffset = msgBodyOffset + 4;
-    totalSizeVerices = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    totalSizeVertices = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
     msgBodyOffset = msgBodyOffset + 4;
     numberOfLines = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
     msgBodyOffset = msgBodyOffset + 4;
     totalSizeLines = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
     msgBodyOffset = msgBodyOffset + 4;
     numberOfPolygons = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+    disp('Number of Polygons');
+    disp(numberOfPolygons);
     msgBodyOffset = msgBodyOffset + 4;
     totalSizePolygons = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
     msgBodyOffset = msgBodyOffset + 4;
@@ -158,13 +163,14 @@ function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
     msgBodyOffset = msgBodyOffset + 4;
     
     polyData.points = zeros(numberOfPoints, 3);
-    disp(polyData.points);
+    
     for pointIndex=1:numberOfPoints
       for componentIndex=1:3
         polyData.points(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
         msgBodyOffset = msgBodyOffset + 4;
       end      
     end
+    disp(polyData.points);
     
     %Read Vertex---------------------
     %Determine Size of Matrix
@@ -172,10 +178,11 @@ function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
     sizeListOffset = msgBodyOffset;
     for i=1:numberOfVertices
         vertexIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
-        append(vertexSizeList, vertexIndex);
-        sizeListOffset = sizeListOffset + (4*vertexIndex);
+        vertexSizeList(i) = vertexIndex;
+        sizeListOffset = sizeListOffset + 4;
     end
     maxVertexSize = max(vertexSizeList);
+    disp(vertexSizeList);
     
     %Create empty matrix and insert data
     polyData.vertices = zeros(numberOfVertices, maxVertexSize);
@@ -187,14 +194,15 @@ function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
         end
     end
     
+    
     %Read Lines---------------------
     %Determine Size of Matrix
     lineSizeList = [];
     sizeListOffset = msgBodyOffset;
     for i=1:numberOfLines
         lineIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
-        append(lineSizeList, lineIndex);
-        sizeListOffset = sizeListOffset + (4*lineIndex);
+        lineSizeList(i) = lineIndex;
+        sizeListOffset = sizeListOffset + 4;
     end
     maxLineSize = max(lineSizeList);
     
@@ -214,8 +222,8 @@ function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
     sizeListOffset = msgBodyOffset;
     for i=1:numberOfPolygons
         polygonIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
-        append(polygonSizeList, polygonIndex);
-        sizeListOffset = sizeListOffset + (4*polygonIndex);
+        polygonSizeList(i) = polygonIndex;
+        sizeListOffset = sizeListOffset + 4;
     end
     maxPolygonSize = max(polygonSizeList);
     
@@ -223,32 +231,37 @@ function [name polyData] = handlePolyDataMessage(msg, onRxPolyDataMessage)
     polyData.polygons = zeros(numberOfPolygons, maxPolygonSize);
     for pointIndex=1:numberOfPolygons
         polygonIndex = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        msgBodyOffset = msgBodyOffset + 4;
         for componentIndex=1:polygonIndex
-            polyData.polygons(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+            polyData.polygons(pointIndex,componentIndex) = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
             msgBodyOffset = msgBodyOffset + 4;
         end
     end
-    
+    disp(polyData.polygons);
     %Read Triangle Strips---------------------
     %Determine Size of Matrix
-    triangleStripSizeList = [];
+    triangleStripSizeList = zeros(1, numberOfTriangleStrips);
     sizeListOffset = msgBodyOffset;
     for i=1:numberOfTriangleStrips
         triangleStripIndex = convertFromUint8VectorToUint32(msg.body(sizeListOffset:sizeListOffset+3));
-        append(triangleStripSizeList, triangleStripIndex);
-        sizeListOffset = sizeListOffset + (4*triangleStripIndex);
+        triangleStripSizeList(i) = triangleStripIndex;
+        sizeListOffset = sizeListOffset + 4;
     end
     maxTriangleStripSize = max(triangleStripSizeList);
     
+    disp(sizeListOffset);
+    disp(msgBodyOffset);
     %Create empty matrix and insert data
-    polyData.triangleStrips = zeros(numberOfTrianglesStrips, maxTriangleStripSize);
+    polyData.triangleStrips = zeros(numberOfTriangleStrips, maxTriangleStripSize);
     for pointIndex=1:numberOfTriangleStrips
         triangleStripIndex = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
+        msgBodyOffset = msgBodyOffset + 4;
         for componentIndex=1:triangleStripIndex
-            polyData.triangleStrips(pointIndex,componentIndex) = convertFromUint8VectorToFloat32(msg.body(msgBodyOffset:msgBodyOffset+3));
+            polyData.triangleStrips(pointIndex,componentIndex) = convertFromUint8VectorToUint32(msg.body(msgBodyOffset:msgBodyOffset+3));
             msgBodyOffset = msgBodyOffset + 4;
         end
     end
+    disp(polyData.triangleStrips);
     
     
     
@@ -358,6 +371,10 @@ end
 
 function result=convertFromUint8VectorToUint16(uint8Vector)
   result=int32(uint8Vector(1))*256+int32(uint8Vector(2));
+end
+
+function result=convertFromUint8VectorToUint32(uint8Vector)
+  result=int32(uint8Vector(1))*256^3+int32(uint8Vector(2))*256^2+int32(uint8Vector(3))*256^1+int32(uint8Vector(4));
 end
 
 function result=convertFromUint8VectorToFloat32(uint8Vector)
